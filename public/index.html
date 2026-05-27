@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no"/>
+    <title>VRFS Verifier - ImGui</title>
+    <style>
+      body {
+        font-family: arial;
+        margin: 0;
+        padding: 0;
+      }
+      .emscripten { 
+        position: absolute;
+        top: 0px;
+        left: 0px;
+        margin: 0px;
+        border: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        display: block;
+        image-rendering: pixelated;
+      }
+      canvas.emscripten { 
+        border: 0px none; 
+        background-color: black; 
+      }
+    </style>
+  </head>
+  <body>
+    <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+
+    <script type='text/javascript'>
+      var Module = {
+        preRun: [],
+        postRun: [],
+        print: (function() {})(),
+        printErr: function(text) {},
+        canvas: (function() {
+          var canvas = document.getElementById('canvas');
+          canvas.addEventListener("webglcontextlost", function(e) { 
+            alert('WebGL context lost. You will need to reload the page.'); 
+            e.preventDefault(); 
+          }, false);
+          return canvas;
+        })(),
+        setStatus: function(text) {},
+        totalDependencies: 0,
+        monitorRunDependencies: function(left) {}
+      };
+    </script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script async type="text/javascript" src="imgui.js"></script>
+    <script>
+      // Backend integration
+      let currentUser = null;
+      let socket = null;
+      let pollingInterval = null;
+
+      // Backend functions
+      async function login(uid, password) {
+        const res = await fetch('/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentUser = data;
+          // Save to localStorage
+          localStorage.setItem('savedUid', uid);
+          localStorage.setItem('savedPassword', password);
+          // Call C++ function to set logged in state
+          if (Module._setLoggedIn) {
+            Module._setLoggedIn(data.uid, data.username, data.country || '');
+          }
+          if (Module._setVerified && data.verified) {
+            Module._setVerified(true);
+          }
+          initChat();
+        }
+        return data;
+      }
+      
+      async function register(uid, username, password) {
+        const res = await fetch('/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uid, username, password })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentUser = data;
+          // Save to localStorage
+          localStorage.setItem('savedUid', uid);
+          localStorage.setItem('savedPassword', password);
+          // Call C++ function to set logged in state
+          if (Module._setLoggedIn) {
+            Module._setLoggedIn(data.uid, data.username, data.country || '');
+          }
+          initChat();
+        }
+        return data;
+      }
+
+      function initChat() {
+        if (socket) return;
+        socket = io();
+        socket.on('connect', () => {
+          socket.emit('join', currentUser.uid);
+          loadChatHistory();
+          loadUsers();
+          if (Module._setOnline) {
+            Module._setOnline(true);
+          }
+        });
+        socket.on('message', (msg) => {
+          if (Module._addChatMessage) {
+            Module._addChatMessage(msg.username, msg.text, new Date(msg.timestamp).toLocaleTimeString());
+          }
+        });
+        socket.on('userStatus', (data) => {
+          loadUsers();
+        });
+        socket.on('onlineUsers', (users) => {
+          if (Module._setOnlineUsers) {
+            Module._setOnlineUsers(JSON.stringify(users));
+          }
+        });
+        socket.on('disconnect', () => {
+          if (Module._setOnline) {
+            Module._setOnline(false);
+          }
+        });
+      }
+
+      function sendMessage(text) {
+        if (socket) {
+          socket.emit('message', { uid: currentUser.uid, text });
+        }
+      }
+
+      function generateVerifyName() {
+        const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        let name = "";
+        for (let i = 0; i < 4; i++) {
+          name += letters[Math.floor(Math.random() * letters.length)];
+        }
+        if (Module._setVerifyName) {
+          Module._setVerifyName(name);
+        }
+      }
+
+      async function verifyName(name) {
+        const res = await fetch('/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ expectedName: name })
+        });
+        const data = await res.json();
+        if (data.success) {
+          currentUser.verified = true;
+          if (Module._setVerified) {
+            Module._setVerified(true);
+          }
+          initChat();
+        }
+      }
+
+      async function loadChatHistory() {
+        const res = await fetch('/chat/history');
+        const messages = await res.json();
+        if (Module._clearChatMessages) {
+          Module._clearChatMessages();
+        }
+        messages.forEach(msg => {
+          if (Module._addChatMessage) {
+            Module._addChatMessage(msg.username, msg.text, new Date(msg.timestamp).toLocaleTimeString());
+          }
+        });
+      }
+
+      async function loadUsers() {
+        const res = await fetch('/users');
+        const users = await res.json();
+        if (Module._setOnlineUsers) {
+          Module._setOnlineUsers(JSON.stringify(users));
+        }
+      }
+
+      // Poll C++ button click flags
+      function pollButtonFlags() {
+        if (!Module) return;
+
+        // Check login button
+        if (Module._shouldLogin && Module._shouldLogin()) {
+          const uid = Module._getLoginUid ? Module._getLoginUid() : '';
+          const password = Module._getLoginPassword ? Module._getLoginPassword() : '';
+          if (uid && password) {
+            login(uid, password);
+          }
+          if (Module._clearLoginClicked) Module._clearLoginClicked();
+        }
+
+        // Check register button
+        if (Module._shouldRegister && Module._shouldRegister()) {
+          const uid = Module._getRegUid ? Module._getRegUid() : '';
+          const username = Module._getRegUsername ? Module._getRegUsername() : '';
+          const password = Module._getRegPassword ? Module._getRegPassword() : '';
+          if (uid && username && password) {
+            register(uid, username, password);
+          }
+          if (Module._clearRegisterClicked) Module._clearRegisterClicked();
+        }
+
+        // Check generate verify button
+        if (Module._shouldGenerateVerify && Module._shouldGenerateVerify()) {
+          generateVerifyName();
+          if (Module._clearGenerateVerifyClicked) Module._clearGenerateVerifyClicked();
+        }
+
+        // Check verify button
+        if (Module._shouldVerify && Module._shouldVerify()) {
+          const name = Module._getVerifyName ? Module._getVerifyName() : '';
+          if (name) {
+            verifyName(name);
+          }
+          if (Module._clearVerifyClicked) Module._clearVerifyClicked();
+        }
+
+        // Check send chat button
+        if (Module._shouldSendChat && Module._shouldSendChat()) {
+          const text = Module._getChatInput ? Module._getChatInput() : '';
+          if (text) {
+            sendMessage(text);
+            if (Module._clearChatInput) Module._clearChatInput();
+          }
+          if (Module._clearSendChatClicked) Module._clearSendChatClicked();
+        }
+      }
+
+      // Check session on load
+      window.onload = async () => {
+        try {
+          const res = await fetch('/me');
+          if (res.ok) {
+            const data = await res.json();
+            currentUser = data;
+            if (Module._setLoggedIn) {
+              Module._setLoggedIn(data.uid, data.username, data.country || '');
+            }
+            if (Module._setVerified && data.verified) {
+              Module._setVerified(true);
+            }
+            if (Module._setOnline && data.online) {
+              Module._setOnline(true);
+            }
+            initChat();
+          } else {
+            // Try saved credentials from localStorage
+            const savedUid = localStorage.getItem('savedUid');
+            const savedPassword = localStorage.getItem('savedPassword');
+            if (savedUid && savedPassword) {
+              await login(savedUid, savedPassword);
+            }
+          }
+        } catch (e) {
+          console.error('Error checking session:', e);
+        }
+        
+        // Start polling button flags
+        pollingInterval = setInterval(pollButtonFlags, 100);
+      };
+      
+      // Cleanup on unload
+      window.onbeforeunload = () => {
+        if (pollingInterval) clearInterval(pollingInterval);
+      };
+    </script>

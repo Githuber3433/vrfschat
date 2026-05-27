@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VRFS Community</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0; 
+      padding: 0;
+      min-height: 100vh;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-size: 13px;
+    }
+
+    .container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      padding: 10px;
+    }
+    
+    /* Navigation */
+    .nav { 
+      display: flex; 
+      gap: 5px; 
+      margin-bottom: 10px; 
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    .nav button {
+      background: #3e3e3e;
+      color: #d4d4d4;
+      border: 1px solid #555;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .nav button:hover {
+      background: #505050;
+    }
+    .nav button.active {
+      background: #007acc;
+      border-color: #007acc;
+    }
+    
+    /* ImGui-style panels */
+    .panel {
+      background: #252526;
+      border: 1px solid #3e3e3e;
+      padding: 10px;
+    }
+    
+    .auth-box {
+      max-width: 350px;
+      margin: 50px auto;
+    }
+    .auth-box h2 { 
+      margin: 0 0 15px 0; 
+      font-size: 16px;
+      font-weight: normal;
+      color: #d4d4d4;
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    .auth-box input {
+      width: 100%;
+      padding: 6px;
+      margin: 5px 0;
+      background: #1e1e1e;
+      border: 1px solid #3e3e3e;
+      color: #d4d4d4;
+      font-size: 13px;
+    }
+    .auth-box input:focus {
+      outline: none;
+      border-color: #007acc;
+    }
+    .auth-box button {
+      width: 100%;
+      padding: 6px;
+      margin-top: 10px;
+      background: #007acc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .auth-box button:hover {
+      background: #0062a3;
+    }
+    .auth-box button:disabled {
+      background: #3e3e3e;
+      color: #888;
+    }
+    .switch { 
+      margin-top: 10px; 
+      cursor: pointer; 
+      color: #007acc;
+      font-size: 12px;
+    }
+    .switch:hover {
+      color: #0098ff;
+    }
+    
+    .verify-box {
+      max-width: 450px;
+      margin: 10px auto;
+    }
+    .verify-box h2 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+      font-weight: normal;
+      color: #d4d4d4;
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    .verify-box button {
+      width: 100%;
+      padding: 6px;
+      margin: 5px 0;
+      background: #007acc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .verify-box button:hover {
+      background: #0062a3;
+    }
+    .verify-box button:disabled { 
+      background: #3e3e3e;
+      color: #888;
+      cursor: default;
+    }
+    .status { 
+      margin-top: 10px; 
+      padding: 8px;
+      border: 1px solid #3e3e3e;
+      font-size: 12px;
+    }
+    .status.ok { 
+      background: #1e3a1e;
+      border-color: #2d6a4f;
+      color: #95d5b2;
+    }
+    .status.err { 
+      background: #3a1e1e;
+      border-color: #6a2d2d;
+      color: #d59595;
+    }
+    
+    /* Chat Styles */
+    .chat-container {
+      display: flex;
+      gap: 5px;
+      height: calc(100vh - 100px);
+    }
+    .chat-sidebar {
+      width: 200px;
+      background: #252526;
+      border: 1px solid #3e3e3e;
+      padding: 5px;
+      overflow-y: auto;
+    }
+    .chat-sidebar h3 { 
+      margin: 0 0 10px;
+      font-size: 13px;
+      font-weight: normal;
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    
+    .chat-main {
+      flex: 1;
+      background: #252526;
+      border: 1px solid #3e3e3e;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+    .chat-messages::-webkit-scrollbar {
+      width: 8px;
+    }
+    .chat-messages::-webkit-scrollbar-track {
+      background: #1e1e1e;
+    }
+    .chat-messages::-webkit-scrollbar-thumb {
+      background: #3e3e3e;
+    }
+    .message {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .message img { 
+      width: 32px; 
+      height: 32px;
+      border: 1px solid #3e3e3e;
+    }
+    .message-content { flex: 1; }
+    .message-header { 
+      display: flex; 
+      gap: 8px; 
+      margin-bottom: 3px;
+    }
+    .message-username { 
+      font-weight: normal; 
+      color: #007acc;
+    }
+    .message-time { 
+      color: #888; 
+      font-size: 11px;
+    }
+    .message-text { 
+      background: #1e1e1e;
+      padding: 6px;
+      border: 1px solid #3e3e3e;
+    }
+    
+    .chat-input {
+      padding: 5px;
+      border-top: 1px solid #3e3e3e;
+      display: flex;
+      gap: 5px;
+    }
+    .chat-input input {
+      flex: 1;
+      padding: 6px;
+      background: #1e1e1e;
+      border: 1px solid #3e3e3e;
+      color: #d4d4d4;
+      font-size: 13px;
+    }
+    .chat-input input:focus {
+      outline: none;
+      border-color: #007acc;
+    }
+    .chat-input button {
+      padding: 6px 15px;
+      background: #007acc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .chat-input button:hover {
+      background: #0062a3;
+    }
+    
+    /* User List */
+    .user-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px;
+      border: 1px solid transparent;
+      cursor: pointer;
+    }
+    .user-item:hover {
+      background: #2d2d30;
+      border-color: #3e3e3e;
+    }
+    .user-item img { 
+      width: 24px; 
+      height: 24px;
+      border: 1px solid #3e3e3e;
+    }
+    .user-item-info {
+      flex: 1;
+    }
+    .user-item-name {
+      font-size: 12px;
+      color: #d4d4d4;
+    }
+    .user-item-country {
+      font-size: 10px;
+      color: #888;
+    }
+    .user-item-status {
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .status-dot {
+      width: 6px;
+      height: 6px;
+    }
+    .status-dot.online {
+      background: #4ec9b0;
+    }
+    .status-dot.offline {
+      background: #555;
+    }
+    .status-text {
+      color: #888;
+    }
+    .status-text.online {
+      color: #4ec9b0;
+    }
+    
+    /* Profile Card */
+    .profile-card {
+      max-width: 400px;
+      margin: 20px auto;
+    }
+    .profile-card img { 
+      width: 100px; 
+      height: 100px;
+      border: 1px solid #3e3e3e;
+      margin-bottom: 10px;
+    }
+    .profile-card h2 { 
+      margin: 0 0 5px;
+      font-size: 16px;
+      font-weight: normal;
+      color: #d4d4d4;
+    }
+    .profile-card .uid { 
+      color: #888; 
+      margin: 2px 0;
+      font-size: 12px;
+    }
+    .profile-card .country {
+      color: #888;
+      margin: 2px 0;
+      font-size: 12px;
+    }
+    .profile-card .status-info {
+      color: #888;
+      margin: 2px 0 10px;
+      font-size: 12px;
+    }
+    .profile-card .status-info .online {
+      color: #4ec9b0;
+    }
+    .profile-card .verified { 
+      color: #4ec9b0;
+      padding: 4px 10px;
+      display: inline-block;
+      border: 1px solid #4ec9b0;
+      font-size: 12px;
+    }
+    .profile-card .not-verified { 
+      color: #f44747;
+      padding: 4px 10px;
+      display: inline-block;
+      border: 1px solid #f44747;
+      font-size: 12px;
+    }
+    .profile-card #profile-joined {
+      margin-top: 10px;
+      color: #888;
+      font-size: 12px;
+    }
+    .profile-card .back-button {
+      margin-top: 10px;
+      padding: 6px 15px;
+      background: #3e3e3e;
+      color: #d4d4d4;
+      border: 1px solid #555;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .profile-card .back-button:hover {
+      background: #505050;
+    }
+    
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Auth Section -->
+    <div id="auth-section">
+      <div class="auth-box panel" id="login-box">
+        <h2>Login</h2>
+        <input type="text" id="login-uid" placeholder="VRFS UID">
+        <input type="password" id="login-password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <div class="switch" onclick="showRegister()">Don't have an account? Register</div>
+        <div id="login-error" class="status err"></div>
+      </div>
+      
+      <div class="auth-box panel hidden" id="register-box">
+        <h2>Register</h2>
+        <input type="text" id="reg-uid" placeholder="VRFS UID">
+        <input type="text" id="reg-username" placeholder="Username">
+        <input type="password" id="reg-password" placeholder="Password">
+        <button onclick="register()">Register</button>
+        <div class="switch" onclick="showLogin()">Already have an account? Login</div>
+        <div id="reg-error" class="status err"></div>
+      </div>
+    </div>
+    
+    <!-- Main Section -->
+    <div id="main-section" class="hidden">
+      <div class="nav">
+        <button onclick="showSection('verify')" id="nav-verify" class="active">Verify</button>
+        <button onclick="showSection('chat')" id="nav-chat">Chat</button>
+        <button onclick="showSection('profile')" id="nav-profile">Profile</button>
+        <button onclick="logout()">Logout</button>
+      </div>
+      
+      <!-- Verify Section -->
+      <div id="verify-section">
+        <div class="verify-box panel">
+          <h2>VRFS Verification</h2>
+          <p id="verify-status" style="color: #888; margin: 0 0 10px;">Complete verification to access chat</p>
+          <button id="generate-btn" onclick="generateName()">Generate verification name</button>
+          <p id="instructions" style="color: #d4d4d4; font-size: 12px;"></p>
+          <button id="verify-btn" onclick="verifyName()" disabled>I've changed my name, verify</button>
+          <div id="verify-result" class="status"></div>
+        </div>
+      </div>
+      
+      <!-- Chat Section -->
+      <div id="chat-section" class="hidden">
+        <div id="chat-loading" style="text-align: center; padding: 50px;">
+          <p style="color: #888;">Loading chat...</p>
+        </div>
+        <div class="chat-container hidden" id="chat-content">
+          <div class="chat-sidebar">
+            <h3>Online Users</h3>
+            <div id="users-list"></div>
+          </div>
+          <div class="chat-main">
+            <div class="chat-messages" id="chat-messages"></div>
+            <div class="chat-input">
+              <input type="text" id="chat-input" placeholder="Type a message..." onkeypress="if(event.key==='Enter')sendMessage()">
+              <button onclick="sendMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Profile Section -->
+      <div id="profile-section" class="hidden">
+        <div class="profile-card panel">
+          <img id="profile-avatar" src="" alt="Avatar">
+          <h2 id="profile-username"></h2>
+          <p class="uid" id="profile-uid"></p>
+          <p class="country" id="profile-country"></p>
+          <p class="status-info" id="profile-status"></p>
+          <p id="profile-verified"></p>
+          <p id="profile-joined"></p>
+          <button class="back-button" onclick="loadProfile()">Back to My Profile</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentUser = null;
+    let socket = null;
+    let expectedName = null;
+
+    function showRegister() {
+      document.getElementById('login-box').classList.add('hidden');
+      document.getElementById('register-box').classList.remove('hidden');
+    }
+
+    function showLogin() {
+      document.getElementById('register-box').classList.add('hidden');
+      document.getElementById('login-box').classList.remove('hidden');
+    }
+
+    async function register() {
+      const uid = document.getElementById('reg-uid').value.trim();
+      const username = document.getElementById('reg-username').value.trim();
+      const password = document.getElementById('reg-password').value;
+
+      const res = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid, username, password })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        currentUser = data;
+        localStorage.setItem('savedUid', uid);
+        localStorage.setItem('savedPassword', password);
+        showMain();
+      } else {
+        document.getElementById('reg-error').textContent = data.error;
+      }
+    }
+
+    async function login() {
+      const uid = document.getElementById('login-uid').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      const res = await fetch('/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid, password })
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        currentUser = data;
+        localStorage.setItem('savedUid', uid);
+        localStorage.setItem('savedPassword', password);
+        showMain();
+      } else {
+        document.getElementById('login-error').textContent = data.error;
+      }
+    }
+
+    async function logout() {
+      await fetch('/logout', { method: 'POST' });
+      localStorage.removeItem('savedUid');
+      localStorage.removeItem('savedPassword');
+      currentUser = null;
+      if (socket) socket.disconnect();
+      document.getElementById('auth-section').classList.remove('hidden');
+      document.getElementById('main-section').classList.add('hidden');
+    }
+
+    function showMain() {
+      document.getElementById('auth-section').classList.add('hidden');
+      document.getElementById('main-section').classList.remove('hidden');
+      showSection('verify');
+      loadProfile();
+      
+      if (currentUser.verified) {
+        initChat();
+        document.getElementById('verify-status').textContent = 'Already Verified';
+        document.getElementById('verify-status').style.color = '#2d6a4f';
+        document.getElementById('generate-btn').style.display = 'none';
+        document.getElementById('verify-btn').style.display = 'none';
+        document.getElementById('instructions').textContent = 'Your account is verified and can access the chat.';
+      }
+    }
+
+    function showSection(section) {
+      if (section === 'chat' && !currentUser.verified) {
+        alert('You must complete verification to access the chat');
+        return;
+      }
+      
+      document.getElementById('verify-section').classList.add('hidden');
+      document.getElementById('chat-section').classList.add('hidden');
+      document.getElementById('profile-section').classList.add('hidden');
+      
+      document.getElementById(section + '-section').classList.remove('hidden');
+      
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById('nav-' + section).classList.add('active');
+      
+      if (section === 'profile') loadProfile();
+      if (section === 'chat' && currentUser.verified) initChat();
+    }
+
+    function random4LetterName() {
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      let s = "";
+      for (let i = 0; i < 4; i++) {
+        s += letters[Math.floor(Math.random() * letters.length)];
+      }
+      return s;
+    }
+
+    function generateName() {
+      expectedName = random4LetterName();
+      document.getElementById('instructions').textContent = 
+        `Set your VRFS in-game name to exactly: "${expectedName}" (case-sensitive), then click verify.`;
+      document.getElementById('verify-btn').disabled = false;
+    }
+
+    async function verifyName() {
+      const res = await fetch('/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ expectedName })
+      });
+
+      const data = await res.json();
+      const resultEl = document.getElementById('verify-result');
+      
+      if (data.success) {
+        resultEl.textContent = 'Verified! You can now access the chat.';
+        resultEl.className = 'status ok';
+        document.getElementById('verify-status').textContent = 'Verified';
+        document.getElementById('verify-status').style.color = '#2d6a4f';
+        currentUser.verified = true;
+        initChat();
+      } else {
+        resultEl.textContent = `Not verified. Current name: "${data.currentUsername}", expected: "${expectedName}"`;
+        resultEl.className = 'status err';
+      }
+    }
+
+    async function loadProfile() {
+      const res = await fetch('/me');
+      const data = await res.json();
+      
+      document.getElementById('profile-avatar').src = 
+        `https://userpic.vrfs.org/avatar/avatar-pics/${data.uid}.png`;
+      document.getElementById('profile-username').textContent = data.username;
+      document.getElementById('profile-uid').textContent = `UID: ${data.uid}`;
+      document.getElementById('profile-country').textContent = `Country: ${data.country || 'Unknown'}`;
+      
+      const statusInfo = data.online ? 'Online' : `Last seen: ${data.lastSeen ? new Date(data.lastSeen).toLocaleString() : 'Never'}`;
+      document.getElementById('profile-status').innerHTML = statusInfo;
+      if (data.online) {
+        document.getElementById('profile-status').querySelector('.online')?.classList.add('online');
+      }
+      
+      document.getElementById('profile-verified').textContent = 
+        data.verified ? 'Verified' : 'Not Verified';
+      document.getElementById('profile-verified').className = 
+        data.verified ? 'verified' : 'not-verified';
+      document.getElementById('profile-joined').textContent = 
+        `Joined: ${new Date(data.createdAt).toLocaleDateString()}`;
+    }
+
+    async function loadUserProfile(uid) {
+      const res = await fetch(`/profile/${uid}`);
+      const data = await res.json();
+      
+      if (data.error) {
+        alert(data.error);
+        return;
+      }
+      
+      showSection('profile');
+      
+      document.getElementById('profile-avatar').src = data.avatar;
+      document.getElementById('profile-username').textContent = data.username;
+      document.getElementById('profile-uid').textContent = `UID: ${data.uid}`;
+      document.getElementById('profile-country').textContent = `Country: ${data.country || 'Unknown'}`;
+      
+      const statusInfo = data.online ? '<span class="online">Online</span>' : `Last seen: ${data.lastSeen ? new Date(data.lastSeen).toLocaleString() : 'Never'}`;
+      document.getElementById('profile-status').innerHTML = statusInfo;
+      
+      document.getElementById('profile-verified').textContent = 
+        data.verified ? 'Verified' : 'Not Verified';
+      document.getElementById('profile-verified').className = 
+        data.verified ? 'verified' : 'not-verified';
+      document.getElementById('profile-joined').textContent = 
+        `Joined: ${new Date(data.createdAt).toLocaleDateString()}`;
+    }
+
+    async function initChat() {
+      if (socket) return;
+      
+      document.getElementById('chat-loading').classList.remove('hidden');
+      document.getElementById('chat-content').classList.add('hidden');
+      
+      socket = io();
+      
+      socket.on('connect', () => {
+        socket.emit('join', currentUser.uid);
+        loadChatHistory();
+        loadUsers();
+        document.getElementById('chat-loading').classList.add('hidden');
+        document.getElementById('chat-content').classList.remove('hidden');
+      });
+      
+      socket.on('message', (msg) => {
+        addMessage(msg);
+      });
+      
+      socket.on('userStatus', (data) => {
+        updateUserStatus(data.uid, data.online);
+      });
+      
+      socket.on('onlineUsers', (users) => {
+        renderUsers(users);
+      });
+      
+      socket.on('connect_error', (err) => {
+        document.getElementById('chat-loading').innerHTML = '<p style="color: #e94560;">Failed to connect to chat server</p>';
+      });
+    }
+
+    async function loadChatHistory() {
+      const res = await fetch('/chat/history');
+      const messages = await res.json();
+      messages.forEach(addMessage);
+    }
+
+    async function loadUsers() {
+      const res = await fetch('/users');
+      const users = await res.json();
+      renderUsers(users);
+    }
+
+    function renderUsers(users) {
+      const container = document.getElementById('users-list');
+      container.innerHTML = '';
+      
+      users.forEach(user => {
+        const div = document.createElement('div');
+        div.className = 'user-item';
+        div.id = `user-${user.uid}`;
+        div.style.cursor = 'pointer';
+        div.innerHTML = `
+          <img src="${user.avatar}" alt="${user.username}">
+          <div class="user-item-info">
+            <div class="user-item-name">${user.username}</div>
+            <div class="user-item-country">${user.country}</div>
+            <div class="user-item-status">
+              <div class="status-dot ${user.online ? 'online' : 'offline'}"></div>
+              <span class="status-text ${user.online ? 'online' : ''}">${user.online ? 'Online' : 'Offline'}</span>
+            </div>
+          </div>
+        `;
+        div.addEventListener('click', () => loadUserProfile(user.uid));
+        container.appendChild(div);
+      });
+    }
+
+    function updateUserStatus(uid, online) {
+      const userElement = document.getElementById(`user-${uid}`);
+      if (userElement) {
+        const statusDot = userElement.querySelector('.status-dot');
+        const statusText = userElement.querySelector('.status-text');
+        
+        statusDot.className = `status-dot ${online ? 'online' : 'offline'}`;
+        statusText.textContent = online ? 'Online' : 'Offline';
+        statusText.className = `status-text ${online ? 'online' : ''}`;
+      }
+    }
+
+    function addMessage(msg) {
+      const container = document.getElementById('chat-messages');
+      const div = document.createElement('div');
+      div.className = 'message';
+      div.innerHTML = `
+        <img src="${msg.avatar}" alt="${msg.username}">
+        <div class="message-content">
+          <div class="message-header">
+            <span class="message-username">${msg.username}</span>
+            <span class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+          </div>
+          <div class="message-text">${msg.text}</div>
+        </div>
+      `;
+      container.appendChild(div);
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function sendMessage() {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if (!text || !socket) return;
+      
+      socket.emit('message', { uid: currentUser.uid, text });
+      input.value = '';
+    }
+
+    window.onload = async () => {
+      try {
+        const res = await fetch('/me');
+        if (res.ok) {
+          const data = await res.json();
+          currentUser = data;
+          showMain();
+        } else {
+          const savedUid = localStorage.getItem('savedUid');
+          const savedPassword = localStorage.getItem('savedPassword');
+          if (savedUid && savedPassword) {
+            document.getElementById('login-uid').value = savedUid;
+            document.getElementById('login-password').value = savedPassword;
+          }
+        }
+      } catch (e) {
+        console.error('Error checking session:', e);
+      }
+    };
+  </script>
+</body>
+</html>
