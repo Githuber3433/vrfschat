@@ -224,7 +224,9 @@
   </div>
 
   <script>
-    // Using Netlify Functions
+    // Backend URL - update this after deploying to Render
+    const BACKEND_URL = 'YOUR_RENDER_URL_HERE'; // e.g., 'https://vrfs-backend.onrender.com'
+    
     let currentUser = null;
     let socket = null;
     let expectedName = null;
@@ -249,10 +251,16 @@
         return;
       }
 
+      if (BACKEND_URL === 'YOUR_RENDER_URL_HERE') {
+        document.getElementById('reg-error').textContent = 'Backend not deployed yet. Deploy server.js to Render first.';
+        return;
+      }
+
       try {
-        const res = await fetch('/.netlify/functions/register', {
+        const res = await fetch(`${BACKEND_URL}/register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ uid, username, password })
         });
         const data = await res.json();
@@ -264,7 +272,7 @@
           document.getElementById('reg-error').textContent = data.error;
         }
       } catch (err) {
-        document.getElementById('reg-error').textContent = 'Failed to register';
+        document.getElementById('reg-error').textContent = 'Failed to connect to backend';
       }
     }
 
@@ -277,10 +285,16 @@
         return;
       }
 
+      if (BACKEND_URL === 'YOUR_RENDER_URL_HERE') {
+        document.getElementById('login-error').textContent = 'Backend not deployed yet. Deploy server.js to Render first.';
+        return;
+      }
+
       try {
-        const res = await fetch('/.netlify/functions/login', {
+        const res = await fetch(`${BACKEND_URL}/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({ uid, password })
         });
         const data = await res.json();
@@ -292,11 +306,17 @@
           document.getElementById('login-error').textContent = data.error;
         }
       } catch (err) {
-        document.getElementById('login-error').textContent = 'Failed to login';
+        document.getElementById('login-error').textContent = 'Failed to connect to backend';
       }
     }
 
     async function logout() {
+      try {
+        await fetch(`${BACKEND_URL}/logout`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+      } catch (err) {}
       currentUser = null;
       if (socket) socket.disconnect();
       document.getElementById('auth-section').classList.remove('hidden');
@@ -357,11 +377,18 @@
     }
 
     async function verifyName() {
+      if (BACKEND_URL === 'YOUR_RENDER_URL_HERE') {
+        document.getElementById('verify-result').textContent = 'Backend not deployed yet';
+        document.getElementById('verify-result').className = 'status err';
+        return;
+      }
+
       try {
-        const res = await fetch('/.netlify/functions/verify', {
+        const res = await fetch(`${BACKEND_URL}/verify`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ expectedName, uid: currentUser.uid })
+          credentials: 'include',
+          body: JSON.stringify({ expectedName })
         });
         const data = await res.json();
         
