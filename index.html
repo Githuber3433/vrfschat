@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>VRFS Community</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    
+    body { 
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0; 
+      padding: 0;
+      min-height: 100vh;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      font-size: 13px;
+    }
+
+    .container { 
+      max-width: 1200px; 
+      margin: 0 auto; 
+      padding: 10px;
+    }
+    
+    /* Navigation */
+    .nav { 
+      display: flex; 
+      gap: 5px; 
+      margin-bottom: 10px; 
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    .nav button {
+      background: #3e3e3e;
+      color: #d4d4d4;
+      border: 1px solid #555;
+      padding: 6px 12px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .nav button:hover {
+      background: #505050;
+    }
+    .nav button.active {
+      background: #007acc;
+      border-color: #007acc;
+    }
+    
+    /* ImGui-style panels */
+    .panel {
+      background: #252526;
+      border: 1px solid #3e3e3e;
+      padding: 10px;
+    }
+    
+    .auth-box {
+      max-width: 350px;
+      margin: 50px auto;
+    }
+    .auth-box h2 { 
+      margin: 0 0 15px 0; 
+      font-size: 16px;
+      font-weight: normal;
+      color: #d4d4d4;
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    .auth-box input {
+      width: 100%;
+      padding: 6px;
+      margin: 5px 0;
+      background: #1e1e1e;
+      border: 1px solid #3e3e3e;
+      color: #d4d4d4;
+      font-size: 13px;
+    }
+    .auth-box input:focus {
+      outline: none;
+      border-color: #007acc;
+    }
+    .auth-box button {
+      width: 100%;
+      padding: 6px;
+      margin-top: 10px;
+      background: #007acc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .auth-box button:hover {
+      background: #0062a3;
+    }
+    .auth-box button:disabled {
+      background: #3e3e3e;
+      color: #888;
+    }
+    .switch { 
+      margin-top: 10px; 
+      cursor: pointer; 
+      color: #007acc;
+      font-size: 12px;
+    }
+    .switch:hover {
+      color: #0098ff;
+    }
+    
+    .verify-box {
+      max-width: 450px;
+      margin: 10px auto;
+    }
+    .verify-box h2 {
+      margin: 0 0 15px 0;
+      font-size: 16px;
+      font-weight: normal;
+      color: #d4d4d4;
+      border-bottom: 1px solid #3e3e3e;
+      padding-bottom: 5px;
+    }
+    .verify-box button {
+      width: 100%;
+      padding: 6px;
+      margin: 5px 0;
+      background: #007acc;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .verify-box button:hover {
+      background: #0062a3;
+    }
+    .verify-box button:disabled { 
+      background: #3e3e3e;
+      color: #888;
+      cursor: default;
+    }
+    .status { 
+      margin-top: 10px; 
+      padding: 8px;
+      border: 1px solid #3e3e3e;
+      font-size: 12px;
+    }
+    .status.ok { 
+      background: #1e3a1e;
+      border-color: #2d6a4f;
+      color: #95d5b2;
+    }
+    .status.err { 
+      background: #3a1e1e;
+      border-color: #6a2d2d;
+      color: #d59595;
+    }
+    
+    .hidden { display: none !important; }
+    
+    .backend-warning {
+      background: #3a1e1e;
+      border: 1px solid #6a2d2d;
+      color: #d59595;
+      padding: 15px;
+      margin: 20px auto;
+      max-width: 600px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Auth Section -->
+    <div id="auth-section">
+      <div class="auth-box panel" id="login-box">
+        <h2>Login</h2>
+        <input type="text" id="login-uid" placeholder="VRFS UID">
+        <input type="password" id="login-password" placeholder="Password">
+        <button onclick="login()">Login</button>
+        <div class="switch" onclick="showRegister()">Don't have an account? Register</div>
+        <div id="login-error" class="status err"></div>
+      </div>
+      
+      <div class="auth-box panel hidden" id="register-box">
+        <h2>Register</h2>
+        <input type="text" id="reg-uid" placeholder="VRFS UID">
+        <input type="text" id="reg-username" placeholder="Username">
+        <input type="password" id="reg-password" placeholder="Password">
+        <button onclick="register()">Register</button>
+        <div class="switch" onclick="showLogin()">Already have an account? Login</div>
+        <div id="reg-error" class="status err"></div>
+      </div>
+    </div>
+    
+    <!-- Main Section -->
+    <div id="main-section" class="hidden">
+      <div class="nav">
+        <button onclick="showSection('verify')" id="nav-verify" class="active">Verify</button>
+        <button onclick="showSection('profile')" id="nav-profile">Profile</button>
+        <button onclick="logout()">Logout</button>
+      </div>
+      
+      <!-- Verify Section -->
+      <div id="verify-section">
+        <div class="verify-box panel">
+          <h2>VRFS Verification</h2>
+          <p id="verify-status" style="color: #888; margin: 0 0 10px;">Complete verification to access features</p>
+          <button id="generate-btn" onclick="generateName()">Generate verification name</button>
+          <p id="instructions" style="color: #d4d4d4; font-size: 12px;"></p>
+          <button id="verify-btn" onclick="verifyName()" disabled>I've changed my name, verify</button>
+          <div id="verify-result" class="status"></div>
+        </div>
+      </div>
+      
+      <!-- Profile Section -->
+      <div id="profile-section" class="hidden">
+        <div class="profile-card panel">
+          <h2 id="profile-username"></h2>
+          <p class="uid" id="profile-uid"></p>
+          <p class="country" id="profile-country"></p>
+          <p class="status-info" id="profile-status"></p>
+          <p id="profile-verified"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Backend URL - update this after deploying backend
+    const BACKEND_URL = 'YOUR_BACKEND_URL_HERE'; // e.g., 'https://vrfs-backend.onrender.com'
+    
+    let currentUser = null;
+    let socket = null;
+    let expectedName = null;
+
+    function showRegister() {
+      document.getElementById('login-box').classList.add('hidden');
+      document.getElementById('register-box').classList.remove('hidden');
+    }
+
+    function showLogin() {
+      document.getElementById('register-box').classList.add('hidden');
+      document.getElementById('login-box').classList.remove('hidden');
+    }
+
+    async function register() {
+      const uid = document.getElementById('reg-uid').value.trim();
+      const username = document.getElementById('reg-username').value.trim();
+      const password = document.getElementById('reg-password').value;
+      
+      if (!uid || !username || !password) {
+        document.getElementById('reg-error').textContent = 'Please fill in all fields';
+        return;
+      }
+      
+      if (BACKEND_URL === 'YOUR_BACKEND_URL_HERE') {
+        document.getElementById('reg-error').textContent = 'Backend URL not configured. Update BACKEND_URL in the code.';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ uid, username, password })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          currentUser = data;
+          showMain();
+        } else {
+          document.getElementById('reg-error').textContent = data.error;
+        }
+      } catch (err) {
+        document.getElementById('reg-error').textContent = 'Failed to connect to backend';
+      }
+    }
+
+    async function login() {
+      const uid = document.getElementById('login-uid').value.trim();
+      const password = document.getElementById('login-password').value;
+      
+      if (!uid || !password) {
+        document.getElementById('login-error').textContent = 'Please fill in all fields';
+        return;
+      }
+      
+      if (BACKEND_URL === 'YOUR_BACKEND_URL_HERE') {
+        document.getElementById('login-error').textContent = 'Backend URL not configured. Update BACKEND_URL in the code.';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ uid, password })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          currentUser = data;
+          showMain();
+        } else {
+          document.getElementById('login-error').textContent = data.error;
+        }
+      } catch (err) {
+        document.getElementById('login-error').textContent = 'Failed to connect to backend';
+      }
+    }
+
+    async function logout() {
+      try {
+        await fetch(`${BACKEND_URL}/logout`, {
+          method: 'POST',
+          credentials: 'include'
+        });
+      } catch (err) {}
+      currentUser = null;
+      if (socket) socket.disconnect();
+      document.getElementById('auth-section').classList.remove('hidden');
+      document.getElementById('main-section').classList.add('hidden');
+    }
+
+    function showMain() {
+      document.getElementById('auth-section').classList.add('hidden');
+      document.getElementById('main-section').classList.remove('hidden');
+      showSection('verify');
+      updateProfile();
+      
+      if (currentUser.verified) {
+        document.getElementById('verify-status').textContent = 'Already Verified';
+        document.getElementById('verify-status').style.color = '#2d6a4f';
+        document.getElementById('generate-btn').style.display = 'none';
+        document.getElementById('verify-btn').style.display = 'none';
+        document.getElementById('instructions').textContent = 'Your account is verified';
+      }
+    }
+
+    function updateProfile() {
+      if (!currentUser) return;
+      document.getElementById('profile-username').textContent = currentUser.username;
+      document.getElementById('profile-uid').textContent = `UID: ${currentUser.uid}`;
+      document.getElementById('profile-country').textContent = `Country: Loading...`;
+      document.getElementById('profile-status').textContent = `Status: Online`;
+      document.getElementById('profile-status').style.color = '#4ec9b0';
+      document.getElementById('profile-verified').textContent = currentUser.verified ? 'Verified' : 'Not Verified';
+      document.getElementById('profile-verified').className = currentUser.verified ? 'verified' : 'not-verified';
+      document.getElementById('profile-verified').style.color = currentUser.verified ? '#4ec9b0' : '#f44747';
+    }
+
+    function showSection(section) {
+      document.getElementById('verify-section').classList.add('hidden');
+      document.getElementById('profile-section').classList.add('hidden');
+      document.getElementById(section + '-section').classList.remove('hidden');
+      document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+      document.getElementById('nav-' + section).classList.add('active');
+      
+      if (section === 'profile') updateProfile();
+    }
+
+    function random4LetterName() {
+      const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      let s = "";
+      for (let i = 0; i < 4; i++) {
+        s += letters[Math.floor(Math.random() * letters.length)];
+      }
+      return s;
+    }
+
+    function generateName() {
+      expectedName = random4LetterName();
+      document.getElementById('instructions').textContent = 
+        `Set your VRFS in-game name to exactly: "${expectedName}" (case-sensitive), then click verify.`;
+      document.getElementById('verify-btn').disabled = false;
+    }
+
+    async function verifyName() {
+      if (BACKEND_URL === 'YOUR_BACKEND_URL_HERE') {
+        document.getElementById('verify-result').textContent = 'Backend URL not configured';
+        document.getElementById('verify-result').className = 'status err';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${BACKEND_URL}/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ expectedName })
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          document.getElementById('verify-result').textContent = 'Verified! You can now access features.';
+          document.getElementById('verify-result').className = 'status ok';
+          currentUser.verified = true;
+          document.getElementById('verify-status').textContent = 'Verified';
+          document.getElementById('verify-status').style.color = '#2d6a4f';
+          document.getElementById('generate-btn').style.display = 'none';
+          document.getElementById('verify-btn').style.display = 'none';
+          document.getElementById('instructions').textContent = 'Your account is verified';
+        } else {
+          document.getElementById('verify-result').textContent = `Not verified. Current name: "${data.currentUsername}", expected: "${expectedName}"`;
+          document.getElementById('verify-result').className = 'status err';
+        }
+      } catch (err) {
+        document.getElementById('verify-result').textContent = 'Failed to verify';
+        document.getElementById('verify-result').className = 'status err';
+      }
+    }
+  </script>
+</body>
+</html>

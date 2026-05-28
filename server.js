@@ -10,16 +10,36 @@ const fs = require("fs");
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer);
 
-app.use(cors());
+// Configure CORS for frontend on Netlify
+const allowedOrigins = [
+    'https://auma.github.io',
+    'http://localhost:3000',
+    process.env.FRONTEND_URL
+].filter(Boolean);
+
+const io = new Server(httpServer, {
+    cors: {
+        origin: allowedOrigins,
+        credentials: true
+    }
+});
+
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 app.use(session({
-    secret: "vrfs-secret-key-change-in-production",
+    secret: process.env.SESSION_SECRET || "vrfs-secret-key-change-in-production",
     resave: false,
     saveUninitialized: false,
-    cookie: { maxAge: 24 * 60 * 60 * 1000 } // 24 hours
+    cookie: { 
+        maxAge: 24 * 60 * 60 * 1000,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+    }
 }));
 
 // Database files
@@ -324,6 +344,6 @@ app.get("/verify.html", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "verify.html"));
 });
 
-httpServer.listen(3000, () => {
-    console.log("VRFS verifier running at http://localhost:3000/verify.html");
+httpServer.listen(process.env.PORT || 3000, () => {
+    console.log("VRFS verifier running on port", process.env.PORT || 3000);
 });
